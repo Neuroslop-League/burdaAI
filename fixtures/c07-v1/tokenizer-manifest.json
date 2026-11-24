@@ -1,0 +1,11 @@
+{
+  "tokenizer_id": "fixture-wordlevel-sha256-3aa8c6b71d1c887285264a4a15f8a2f02077124f358c9e097802260a49767876",
+  "vocab_size": 8,
+  "special_tokens": {
+    "PAD": 0,
+    "BOS": 1,
+    "EOS": 2
+  },
+  "file": "tokenizer.json",
+  "sha256": "3aa8c6b71d1c887285264a4a15f8a2f02077124f358c9e097802260a49767876"
+}
