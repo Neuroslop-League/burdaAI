@@ -1,0 +1,28 @@
+{
+  "model": {
+    "architecture_version": 1,
+    "num_layers": 20,
+    "hidden_size": 2048,
+    "num_attention_heads": 16,
+    "num_key_value_heads": 4,
+    "intermediate_size": 5632,
+    "max_sequence_length": 4096,
+    "rope_theta": 10000,
+    "rms_norm_eps": 1e-05,
+    "initializer_std": 0.02,
+    "vocab_size": 32768,
+    "tokenizer_id": "burda-bpe-v1-sha256-04efc216e2a03fb974f1420b77c5d631f01d4c3edbaa4b628808b64d96f30413"
+  },
+  "manifest": "data/c04-pilot/shards/manifest.json",
+  "tokenizer": "artifacts/c02-v1",
+  "seed": 42,
+  "steps": 2,
+  "lr": 0.0001,
+  "weight_decay": 0.01,
+  "betas": [
+    0.9,
+    0.999
+  ],
+  "eps": 1e-08,
+  "checkpoint_every": 1
+}
