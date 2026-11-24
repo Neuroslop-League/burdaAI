@@ -55,3 +55,23 @@ python -m scripts.check_c07_bundle
 ```
 
 Фактический результат: для C01 на meta совпали имена, формы и типы всех 182 записей state_dict (968 968 192 элемента). Для контрольного комплекта проверены суммы файлов и прочитаны все 11 тензоров (568 элементов). Реальные веса для сверки схемы не требуются.
+
+## C07.2–3. Экспорт и загрузка
+
+Из корня проекта экспортировать доверенный локальный checkpoint в новый каталог. Python 3.12, CPU PyTorch 2.8.0, numpy 2.2.6 и tokenizers 0.21.4. Экспортёр принимает checkpoint C03 (config/state_dict) и C05 (signature.config.model/model). Проверяет FP32 и точные формы по Python Decoder, пишет плотные матрицы по одной и публикует каталог после формирования всех хешей. Для полного комплекта предусмотреть 3,9 ГБ на диске. Загрузчик Rust проверяет комплект и предоставляет заимствованные представления тензоров поверх одного буфера в RAM.
+
+```sh
+python -m scripts.c07_export checkpoint.pt output/bundle
+cargo run --locked --release --manifest-path rust/Cargo.toml -- output/bundle
+```
+
+Для приёмки на синтетическом checkpoint полный двухформатный тест занимает около 7,3 ГиБ диска. Аргумент теста — новый каталог. Проверка Python дополнительно использует safetensors 0.6.2 для независимого чтения всех значений.
+
+```sh
+python -m scripts.check_c07_export /tmp/burda-c07-test
+cargo test --locked --manifest-path rust/Cargo.toml
+cargo run --locked --release --manifest-path rust/Cargo.toml -- fixtures/c07-v1 --fixture
+cargo run --locked --release --manifest-path rust/Cargo.toml -- /tmp/burda-c07-test/c05
+```
+
+При проверке манифесты обоих экспортов совпали побайтно; SHA-256 весов — `7fee2a2003dd918e39343d44c4f190864222639fc3f6a38c198c2b2f2255b57a`. Rust прочитал 182 тензора полной размерности. В fixture проверены все 568 значений и отказ на неверном профиле, версии, повреждении файла, подмене токенизатора и перестановке осей с заново вычисленным хешем.
