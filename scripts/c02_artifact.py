@@ -5,7 +5,10 @@ from hashlib import sha256
 from pathlib import Path
 
 from tokenizers import Tokenizer, __version__
-from c02_common import roles, sentences, sources, train_bpe
+if __package__:
+    from .c02_common import roles, sentences, sources, train_bpe
+else:
+    from c02_common import roles, sentences, sources, train_bpe
 
 
 def metadata(data):
