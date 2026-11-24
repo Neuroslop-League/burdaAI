@@ -54,6 +54,13 @@ class RMSNorm(nn.Module):
         return (self.weight.float() * z * torch.rsqrt(z.square().mean(-1, keepdim=True) + self.eps)).to(x.dtype)
 
 
+def rope_angles(length, dim, theta, device):
+    index = torch.arange(0, dim, 2, dtype=torch.float32, device=device)
+    freq = theta ** (-index / dim)
+    angles = torch.arange(length, device=device)[:, None, None] * freq
+    return angles.cos(), angles.sin()
+
+
 def rotate(x, cos, sin):
     even, odd = x.float().unflatten(-1, (-1, 2)).unbind(-1)
     return torch.stack((even*cos - odd*sin, even*sin + odd*cos), dim=-1).flatten(-2).to(x.dtype)
@@ -125,10 +132,7 @@ class Decoder(nn.Module):
                 raise ValueError("Expected nonempty right-padded prefixes")
         x = self.embedding(input_ids)
         dim = self.config.hidden_size // self.config.num_attention_heads
-        index = torch.arange(0, dim, 2, dtype=torch.float32, device=x.device)
-        freq = self.config.rope_theta ** (-index / dim)
-        angles = torch.arange(t, device=x.device)[:, None, None] * freq
-        cos, sin = angles.cos(), angles.sin()
+        cos, sin = rope_angles(t, dim, self.config.rope_theta, x.device)
         for block in self.blocks:
             x = block(x, cos, sin, attention_mask)
         logits = F.linear(self.norm(x), self.embedding.weight)
