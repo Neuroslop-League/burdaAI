@@ -1,5 +1,6 @@
 //! Checked C07.1 weights. Tensor views borrow one immutable backing buffer.
 mod json;
+pub mod tokenizer;
 
 use anyhow::{ensure, Context, Result};
 use safetensors::{Dtype, SafeTensors};
@@ -21,6 +22,8 @@ pub enum Profile {
 }
 
 pub struct Bundle {
+    /// Present for reference bundles; the synthetic fixture uses WordLevel.
+    pub tokenizer: Option<tokenizer::TextTokenizer>,
     pub config: Value,
     weights: Vec<u8>,
 }
@@ -135,8 +138,8 @@ impl Bundle {
         let shapes = layout(&config, profile)?;
         let tm = json::parse(&read_file(dir, files, "tokenizer-manifest.json", 1 << 20)?)
             .context("tokenizer-manifest.json")?;
-        let tok = json::parse(&read_file(dir, files, "tokenizer.json", 1 << 28)?)
-            .context("tokenizer.json")?;
+        let token_bytes = read_file(dir, files, "tokenizer.json", 1 << 28)?;
+        let tok = json::parse(&token_bytes).context("tokenizer.json")?;
         let vocab_size = integer(&config, "vocab_size")?;
         let digest = files["tokenizer.json"]["sha256"]
             .as_str()
@@ -194,6 +197,10 @@ impl Bundle {
             );
         }
 
+        let tokenizer = match profile {
+            Profile::Reference => Some(tokenizer::TextTokenizer::from_artifact(&token_bytes, &tm)?),
+            Profile::Fixture => None,
+        };
         let data_size = shapes
             .values()
             .try_fold(0u64, |total, s| {
@@ -231,7 +238,11 @@ impl Bundle {
             tensors.len() == shapes.len(),
             "model.safetensors: unexpected tensor"
         );
-        Ok(Self { config, weights })
+        Ok(Self {
+            config,
+            weights,
+            tokenizer,
+        })
     }
 
     pub fn tensors(&self) -> Result<SafeTensors<'_>> {
