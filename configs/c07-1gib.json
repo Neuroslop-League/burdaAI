@@ -1,0 +1,10 @@
+{
+  "backend": "vulkan",
+  "format": "Q4_0",
+  "gpu_layers": 8,
+  "prompt_ids": 256,
+  "steps": 64,
+  "ignore_eos": true,
+  "poll_ms": 20,
+  "vram_bytes": 1073741824
+}
