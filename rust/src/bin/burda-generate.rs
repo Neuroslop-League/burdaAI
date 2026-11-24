@@ -8,10 +8,15 @@ use std::{env, fs, path::PathBuf};
 fn main() -> Result<()> {
     let mut args = env::args().skip(1);
     let (mut bundle, mut prompt, mut trace) = (None, None, None);
-    let mut max = 16;
+    let mut max: usize = 16;
+    let mut device = String::from("cpu");
+    let mut placement = String::from("cpu");
+    let mut gguf = None;
+    let mut tokenizer_dir = None;
+    let mut runner = PathBuf::from("burda-ggml");
     while let Some(flag) = args.next() {
         if flag == "--help" {
-            println!("burda-generate --bundle DIR --text TEXT [--device cpu] [--placement cpu] [--max-new-tokens N] [--trace-dir NEW_DIR]");
+            println!("burda-generate (--bundle DIR | --gguf FILE --tokenizer DIR [--runner EXE]) --text TEXT [--device cpu|vulkan] [--placement cpu|last:N] [--max-new-tokens N]");
             return Ok(());
         }
         let value = args
@@ -22,14 +27,58 @@ fn main() -> Result<()> {
             "--text" => prompt = Some(value),
             "--trace-dir" => trace = Some(PathBuf::from(value)),
             "--max-new-tokens" => max = value.parse().context("invalid max-new-tokens")?,
-            "--device" | "--placement" => ensure!(
-                value == "cpu",
-                "CPU reference stage supports only cpu for {flag}"
-            ),
+            "--device" => device = value,
+            "--placement" => placement = value,
+            "--gguf" => gguf = Some(PathBuf::from(value)),
+            "--tokenizer" => tokenizer_dir = Some(PathBuf::from(value)),
+            "--runner" => runner = PathBuf::from(value),
             _ => bail!("unknown option {flag}"),
         }
     }
     let prompt = prompt.context("--text required")?;
+    if let Some(path) = gguf {
+        ensure!(
+            bundle.is_none() && trace.is_none(),
+            "GGUF mode takes --gguf and --tokenizer"
+        );
+        let layers = match (device.as_str(), placement.as_str()) {
+            ("cpu", "cpu") => 0,
+            ("vulkan", p) if p.starts_with("last:") => {
+                let n = p[5..].parse::<usize>().context("invalid layer count")?;
+                ensure!((1..=20).contains(&n), "expected 1..20 GPU layers");
+                n
+            }
+            _ => bail!("use cpu/cpu or vulkan/last:N"),
+        };
+        let tokenizer = burda_bundle::tokenizer::TextTokenizer::load_c02(
+            &tokenizer_dir.context("--tokenizer required for GGUF")?,
+        )?;
+        let mut ids = vec![1];
+        ids.extend(tokenizer.encode(&prompt)?);
+        ensure!(ids.len() <= 4096, "prompt exceeds context");
+        let csv = ids.iter().map(u32::to_string).collect::<Vec<_>>().join(",");
+        let output = std::process::Command::new(runner)
+            .arg(path)
+            .arg(layers.to_string())
+            .arg(max.to_string())
+            .arg(&tokenizer.tokenizer_id)
+            .arg(csv)
+            .arg("generate")
+            .stderr(std::process::Stdio::inherit())
+            .output()
+            .context("start burda-ggml")?;
+        ensure!(output.status.success(), "GGUF backend failed");
+        let generated = std::str::from_utf8(&output.stdout)?
+            .lines()
+            .map(str::parse::<u32>)
+            .collect::<Result<Vec<_>, _>>()?;
+        println!("{}", tokenizer.decode(&generated, true)?);
+        return Ok(());
+    }
+    ensure!(
+        device == "cpu" && placement == "cpu" && tokenizer_dir.is_none(),
+        "reference bundle requires CPU placement"
+    );
     let bundle = Bundle::load(&bundle.context("--bundle required")?, Profile::Reference)?;
     let tokenizer = bundle.tokenizer.as_ref().context("missing tokenizer")?;
     let mut ids = vec![1];
