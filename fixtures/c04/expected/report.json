@@ -1,0 +1,151 @@
+{
+  "format_version": 1,
+  "window_size": 8,
+  "tokenizer_id": "burda-bpe-v1-sha256-04efc216e2a03fb974f1420b77c5d631f01d4c3edbaa4b628808b64d96f30413",
+  "vocab_size": 32768,
+  "splits": {
+    "train": {
+      "languages": {
+        "ru": {
+          "docs": 2,
+          "tokens": 13,
+          "docs_pct": 50.0,
+          "tokens_pct": 54.17
+        },
+        "en": {
+          "docs": 2,
+          "tokens": 11,
+          "docs_pct": 50.0,
+          "tokens_pct": 45.83
+        }
+      },
+      "windows": 5,
+      "stored_ids": 33,
+      "sha256": "626b2bd83ff948f53e08099622aeed5d699d821397f6ed29385ac90bc137ae11"
+    },
+    "validation": {
+      "languages": {
+        "ru": {
+          "docs": 1,
+          "tokens": 9,
+          "docs_pct": 50.0,
+          "tokens_pct": 60.0
+        },
+        "en": {
+          "docs": 1,
+          "tokens": 6,
+          "docs_pct": 50.0,
+          "tokens_pct": 40.0
+        }
+      },
+      "windows": 3,
+      "stored_ids": 20,
+      "sha256": "037fd4fa8ac90d85edb8821083bb5d1517edfe3e5e516a86c0ead9c41e2d51c6"
+    },
+    "test": {
+      "languages": {
+        "ru": {
+          "docs": 1,
+          "tokens": 9,
+          "docs_pct": 50.0,
+          "tokens_pct": 56.25
+        },
+        "en": {
+          "docs": 1,
+          "tokens": 7,
+          "docs_pct": 50.0,
+          "tokens_pct": 43.75
+        }
+      },
+      "windows": 4,
+      "stored_ids": 22,
+      "sha256": "a2d1d0a42dbe9ef9e774cd885d7a709007dfe09f675a046e84e35868231aeb70"
+    }
+  },
+  "batch": [
+    {
+      "input_ids": [
+        1,
+        414,
+        18498,
+        1809,
+        614,
+        16,
+        2,
+        0
+      ],
+      "attention_mask": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        false
+      ],
+      "targets": [
+        414,
+        18498,
+        1809,
+        614,
+        16,
+        2,
+        0,
+        -100
+      ],
+      "loss_mask": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        false,
+        false
+      ]
+    },
+    {
+      "input_ids": [
+        1,
+        1845,
+        9854,
+        275,
+        6456,
+        1526,
+        16,
+        2
+      ],
+      "attention_mask": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "targets": [
+        1845,
+        9854,
+        275,
+        6456,
+        1526,
+        16,
+        2,
+        -100
+      ],
+      "loss_mask": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        false
+      ]
+    }
+  ]
+}
