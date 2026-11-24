@@ -1,0 +1,73 @@
+{
+  "format_version": 1,
+  "source_revision": "b04c8d1ceb2f5cd4588862100d08de323dccfbaa",
+  "source_sha256": "731b7225eabd3f8eadd6baca3b370d986b67d5eb8e967fae91b04a50ae453ba8",
+  "tokenizer_id": "burda-bpe-v1-sha256-04efc216e2a03fb974f1420b77c5d631f01d4c3edbaa4b628808b64d96f30413",
+  "vocab_size": 32768,
+  "window_size": 4096,
+  "splits": {
+    "train": {
+      "file": "train-00000.jsonl",
+      "sha256": "dd9b246b2d08be213a9f4e2aa1d21f8bf29f5fafefc6194de7cd5a68c0c4d893",
+      "bytes": 16323,
+      "windows": 23,
+      "stored_ids": 3258,
+      "languages": {
+        "ru": {
+          "documents": 16,
+          "tokens": 2300,
+          "documents_pct": 69.57,
+          "tokens_pct": 71.61
+        },
+        "en": {
+          "documents": 7,
+          "tokens": 912,
+          "documents_pct": 30.43,
+          "tokens_pct": 28.39
+        }
+      }
+    },
+    "validation": {
+      "file": "validation-00000.jsonl",
+      "sha256": "820f897069371ca559e53592141fc07f959341b85b4eb7276b835f67e05fd5ef",
+      "bytes": 11160,
+      "windows": 16,
+      "stored_ids": 2248,
+      "languages": {
+        "ru": {
+          "documents": 8,
+          "tokens": 1183,
+          "documents_pct": 50.0,
+          "tokens_pct": 53.38
+        },
+        "en": {
+          "documents": 8,
+          "tokens": 1033,
+          "documents_pct": 50.0,
+          "tokens_pct": 46.62
+        }
+      }
+    },
+    "test": {
+      "file": "test-00000.jsonl",
+      "sha256": "03c2b5e8f85d2100afff433317a495806260c65463277bb728cdb18b5e895633",
+      "bytes": 12478,
+      "windows": 16,
+      "stored_ids": 2537,
+      "languages": {
+        "ru": {
+          "documents": 8,
+          "tokens": 1548,
+          "documents_pct": 50.0,
+          "tokens_pct": 61.8
+        },
+        "en": {
+          "documents": 8,
+          "tokens": 957,
+          "documents_pct": 50.0,
+          "tokens_pct": 38.2
+        }
+      }
+    }
+  }
+}
