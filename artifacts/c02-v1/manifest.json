@@ -1,0 +1,12 @@
+{
+  "tokenizer_id": "burda-bpe-v1-sha256-04efc216e2a03fb974f1420b77c5d631f01d4c3edbaa4b628808b64d96f30413",
+  "vocab_size": 32768,
+  "special_tokens": {
+    "PAD": 0,
+    "BOS": 1,
+    "EOS": 2
+  },
+  "file": "tokenizer.json",
+  "sha256": "04efc216e2a03fb974f1420b77c5d631f01d4c3edbaa4b628808b64d96f30413",
+  "tokenizers_version": "0.21.4"
+}
