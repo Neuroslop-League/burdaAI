@@ -14,6 +14,7 @@ import torch
 from torch.nn import functional as F
 
 from burdaai.decoder import Config, Decoder
+from burdaai.offload import HostAdamW
 from scripts.c02_artifact import load
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -93,6 +94,41 @@ def preflight(splits):
     print(f"CPU FP32 loss {actual:.9f}, analytic {expected:.9f}, abs {abs(actual-expected):.3g}")
 
 
+def check_offload():
+    p = torch.nn.Parameter(torch.tensor([1., -2.]))
+    saved = p.detach().clone()
+    opt = HostAdamW([p], lr=1e-4)
+    host = opt.host_params[0]
+    assert host.data_ptr() != p.data_ptr()
+    p.grad = torch.tensor([.25, -.5])
+    opt.stage_gradients()
+    assert p.grad is None and torch.equal(host.grad, torch.tensor([.25, -.5]))
+    # Synthetic completed-step state exercises the actual resume path without stepping.
+    sample = dict(step=torch.tensor(1.), exp_avg=torch.tensor([.1, -.2]),
+                  exp_avg_sq=torch.tensor([.01, .04]))
+    opt.state[host] = sample
+    with tempfile.TemporaryFile() as file:
+        torch.save(opt.state_dict(), file)
+        file.seek(0)
+        restored = HostAdamW([p], lr=1e-4)
+        restored.load_state_dict(torch.load(file, weights_only=True, map_location="cpu"))
+    for name, value in restored.state[restored.host_params[0]].items():
+        assert value.device.type == "cpu" and value.dtype == torch.float32
+        assert torch.equal(value, sample[name])
+    # Evaluate the first-step AdamW formula on scratch tensors only.
+    gradient = host.grad
+    moment = .1 * gradient
+    variance = .001 * gradient.square()
+    direction = (moment / .1) / ((variance / .001).sqrt() + 1e-8)
+    torch.testing.assert_close(direction, gradient.sign())
+    with torch.autocast("cpu", dtype=torch.bfloat16):
+        probe = torch.eye(4) @ torch.eye(4)
+    assert probe.dtype == torch.bfloat16 and torch.equal(probe.float(), torch.eye(4))
+    opt.zero_grad()
+    assert host.grad is None and torch.equal(host, saved) and torch.equal(p, saved)
+    print("CPU offload: independent FP32 master, gradient staging, FP32 checkpoint round-trip OK")
+
+
 def peak_ram():
     if sys.platform == "win32":
         import psutil
@@ -116,8 +152,10 @@ def train(args, cfg, splits, digest):
                      accumulate=args.accumulate, torch=str(torch.__version__), cuda=torch.version.cuda,
                      gpu=torch.cuda.get_device_name())
     model = Decoder(Config(**cfg["model"])).cuda()
-    opt = torch.optim.AdamW(model.parameters(), lr=cfg["lr"], betas=tuple(cfg["betas"]),
-                            eps=cfg["eps"], weight_decay=cfg["weight_decay"], foreach=False)
+    if cfg["optimizer_device"] != "cpu":
+        raise ValueError("RTX 5070 profile requires CPU optimizer")
+    opt = HostAdamW(model.parameters(), lr=cfg["lr"], betas=tuple(cfg["betas"]),
+                    eps=cfg["eps"], weight_decay=cfg["weight_decay"])
     rows = windows(splits["train"], args.length)
     random.Random(cfg["seed"]).shuffle(rows)
     start = cursor = tokens = 0
@@ -152,7 +190,7 @@ def train(args, cfg, splits, digest):
         opt.step()
         torch.cuda.synchronize()
         elapsed = time.perf_counter()-before
-        if any(t.dtype != torch.float32 for st in opt.state.values() for t in st.values() if torch.is_tensor(t)):
+        if any(t.dtype != torch.float32 or t.device.type != "cpu" for st in opt.state.values() for t in st.values() if torch.is_tensor(t)):
             raise ValueError("AdamW state must be FP32")
         cursor += len(selected)
         tokens += count
@@ -201,5 +239,6 @@ if __name__ == "__main__":
     splits, digest = read_inputs(cfg)
     if args.mode == "check":
         preflight(splits)
+        check_offload()
     else:
         train(args,cfg,splits,digest)

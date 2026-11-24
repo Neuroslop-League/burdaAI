@@ -24,5 +24,6 @@
     0.999
   ],
   "eps": 1e-08,
+  "optimizer_device": "cpu",
   "checkpoint_every": 1
 }
