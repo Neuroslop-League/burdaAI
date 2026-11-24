@@ -249,3 +249,5 @@ impl Bundle {
         Ok(SafeTensors::deserialize(&self.weights)?)
     }
 }
+
+pub mod cpu;
