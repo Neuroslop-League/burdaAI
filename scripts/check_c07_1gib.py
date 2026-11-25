@@ -2,6 +2,7 @@
 import argparse
 import hashlib
 import json
+import math
 import resource
 import subprocess
 import tempfile
@@ -18,7 +19,10 @@ def bench(args):
     if (cfg["backend"],cfg["format"],cfg["prompt_ids"],cfg["steps"],cfg["ignore_eos"]) != ("vulkan","Q4_0",256,64,True):
         raise ValueError("Unsupported C01.4 acceptance profile")
     dev=args.drm.resolve()/"device"
-    if int((dev/"mem_info_vram_total").read_text()) != cfg["vram_bytes"]:
+    total = dev/"mem_info_vram_total"
+    if not total.is_file() or not (dev/"mem_info_vram_used").is_file():
+        raise ValueError(f"{args.drm}: amdgpu VRAM counters missing; check Linux DRM card and driver")
+    if int(total.read_text()) != cfg["vram_bytes"]:
         raise ValueError("C01.4 requires a dedicated 1 GiB device")
     # Correlate DRM telemetry and Vulkan by allowing only one discrete AMD adapter.
     cards=[p for p in Path("/sys/class/drm").glob("card[0-9]*") if p.name[4:].isdigit()
@@ -54,7 +58,13 @@ def bench(args):
     timings=[s for s in lines if s.startswith("prompt=")]
     if len(generated)!=cfg["steps"] or not proof or not timings or peak_ram==0:
         raise ValueError("Incomplete acceptance evidence")
-    print(json.dumps(dict(model_sha256=model_hash, config=cfg, pci=dev.resolve().name,
+    fields = dict(item.split("=",1) for item in timings[-1].split())
+    if int(fields["prompt"]) != cfg["prompt_ids"] or int(fields["emitted"]) != cfg["steps"]:
+        raise ValueError("Backend reported unexpected scenario dimensions")
+    metrics = {k: float(fields[k]) for k in ("cold_ttft_s","warm_ttft_s","tokens_per_second_after_first")}
+    if not all(math.isfinite(v) and v > 0 for v in metrics.values()):
+        raise ValueError("Invalid backend timing")
+    print(json.dumps(dict(metrics=metrics, model_sha256=model_hash, config=cfg, pci=dev.resolve().name,
                           baseline_vram=base,sampled_peak_vram=peak_vram,sampled_peak_rss=peak_ram,
                           peak_rss_bytes=1024*resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss,
                           gpu=proof,timing=timings,generated_ids=generated),indent=2))
