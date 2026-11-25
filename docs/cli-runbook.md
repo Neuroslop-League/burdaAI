@@ -72,7 +72,7 @@ python -m scripts.check_c07_1gib "$runner" "$GGUF" --drm "$drm" \
 prompt=$(python3 -c 'print(" a" * 255, end="")')
 /usr/bin/time -l "$cli" --gguf "$GGUF" --tokenizer artifacts/c02-v1 \
   --runner "$work/cpu/bin/burda-ggml" --device cpu --placement cpu \
-  --text "$prompt" --max-new-tokens 64 --benchmark-256x64 \
+  --text "$prompt" --max-new-tokens 64 --benchmark-256x64 --kv off \
   >mac-256x64.txt 2>mac-256x64.log
 grep -E '^prompt=|maximum resident set size' mac-256x64.log
 ```

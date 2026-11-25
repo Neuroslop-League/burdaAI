@@ -8,7 +8,7 @@ use std::{env, fs, path::PathBuf};
 fn main() -> Result<()> {
     let mut args = env::args().skip(1);
     let (mut bundle, mut prompt, mut trace) = (None, None, None);
-    let mut kv = "on".to_string();
+    let mut kv = None;
     let mut threads = 4usize;
     let mut benchmark = false;
     let mut max: usize = 16;
@@ -38,7 +38,7 @@ fn main() -> Result<()> {
             "--placement" => placement = value,
             "--kv" => {
                 ensure!(value == "on" || value == "off", "expected on/off");
-                kv = value;
+                kv = Some(value);
             }
             "--threads" => {
                 threads = value.parse()?;
@@ -78,7 +78,11 @@ fn main() -> Result<()> {
         );
         let csv = ids.iter().map(u32::to_string).collect::<Vec<_>>().join(",");
         let output = std::process::Command::new(runner)
-            .env("BURDA_KV", &kv)
+            .env(
+                "BURDA_KV",
+                kv.as_deref()
+                    .unwrap_or(if layers == 0 { "on" } else { "off" }),
+            )
             .env("BURDA_THREADS", threads.to_string())
             .arg(path)
             .arg(layers.to_string())
