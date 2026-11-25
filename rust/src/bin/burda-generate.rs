@@ -8,6 +8,7 @@ use std::{env, fs, path::PathBuf};
 fn main() -> Result<()> {
     let mut args = env::args().skip(1);
     let (mut bundle, mut prompt, mut trace) = (None, None, None);
+    let mut benchmark = false;
     let mut max: usize = 16;
     let mut device = String::from("cpu");
     let mut placement = String::from("cpu");
@@ -16,8 +17,12 @@ fn main() -> Result<()> {
     let mut runner = PathBuf::from("burda-ggml");
     while let Some(flag) = args.next() {
         if flag == "--help" {
-            println!("burda-generate (--bundle DIR | --gguf FILE --tokenizer DIR [--runner EXE]) --text TEXT [--device cpu|vulkan] [--placement cpu|last:N] [--max-new-tokens N]");
+            println!("burda-generate (--bundle DIR | --gguf FILE --tokenizer DIR [--runner EXE]) --text TEXT [--device cpu|vulkan] [--placement cpu|last:N] [--max-new-tokens N] [--benchmark-256x64]");
             return Ok(());
+        }
+        if flag == "--benchmark-256x64" {
+            benchmark = true;
+            continue;
         }
         let value = args
             .next()
@@ -36,6 +41,7 @@ fn main() -> Result<()> {
         }
     }
     let prompt = prompt.context("--text required")?;
+    ensure!(!benchmark || gguf.is_some(), "benchmark requires GGUF Q4_0");
     if let Some(path) = gguf {
         ensure!(
             bundle.is_none() && trace.is_none(),
@@ -56,6 +62,10 @@ fn main() -> Result<()> {
         let mut ids = vec![1];
         ids.extend(tokenizer.encode(&prompt)?);
         ensure!(ids.len() <= 4096, "prompt exceeds context");
+        ensure!(
+            !benchmark || (ids.len() == 256 && max == 64),
+            "benchmark requires 256 input IDs including BOS and 64 output steps"
+        );
         let csv = ids.iter().map(u32::to_string).collect::<Vec<_>>().join(",");
         let output = std::process::Command::new(runner)
             .arg(path)
@@ -63,7 +73,7 @@ fn main() -> Result<()> {
             .arg(max.to_string())
             .arg(&tokenizer.tokenizer_id)
             .arg(csv)
-            .arg("generate")
+            .arg(if benchmark { "benchmark" } else { "generate" })
             .stderr(std::process::Stdio::inherit())
             .output()
             .context("start burda-ggml")?;
@@ -72,6 +82,10 @@ fn main() -> Result<()> {
             .lines()
             .map(str::parse::<u32>)
             .collect::<Result<Vec<_>, _>>()?;
+        ensure!(
+            !benchmark || generated.len() == 64,
+            "benchmark returned fewer than 64 IDs"
+        );
         println!("{}", tokenizer.decode(&generated, true)?);
         return Ok(());
     }

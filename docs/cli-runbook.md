@@ -26,7 +26,7 @@ grep -E 'model buffer size|prompt=|compute buffer size' "$work/cpu.log"
 
 При ошибке сборки сохранить вывод `rustc -Vv`, `cargo -V`, `c++ --version`, `cmake --version`, `git rev-parse HEAD` и `git -C "$work/llama" rev-parse HEAD`. Последняя команда должна вернуть 74d4f5b041ad837153b0e90fc864b8290e01d8d5. Если GGUF-процесс не стартует, проверить путь к runner и его динамические библиотеки (`ldd "$work/cpu/bin/burda-ggml"` на Linux, `otool -L "$work/cpu/bin/burda-ggml"` на macOS). При несовместимости токенизатора сверить SHA-256 tokenizer.json с манифестом C02. Для reference-f32 ошибка хеша указывает конкретный файл комплекта.
 
-## Vulkan и аппаратная приёмка
+## C07.6. Vulkan на дискретной карте
 
 Выбранный профиль — Linux, одна дискретная AMD amdgpu с 1 ГиБ выделенной VRAM, Vulkan ICD, Vulkan headers, glslc и vulkan-tools. Выполнять из того же клона и окружения. Вывести доступные карты и выбрать соответствующий cardN:
 
@@ -63,3 +63,18 @@ python -m scripts.check_c07_1gib "$runner" "$GGUF" --drm "$drm" \
 ## Результат проверки из свежего клона
 
 Проверены исходники main на a21b02e после слияния PR #18: новый клон, пустой CARGO_HOME, новый target, отдельный Python venv, новый checkout llama.cpp и новый каталог сборки GGML. Среда — macOS 26.7.1, Apple M1, системная инструментальная цепочка, CMake 3.31.6. Входные синтетические FP32/Q4_0 веса взяты из C07.5–6. Из запроса «Привет, мир!» обе CPU-команды выдали по четыре токена. Вывод reference-f32 — ` Fort отличfooddate`, Q4_0 — ` осужд Equource творческой`. Запрос Vulkan к CPU-сборке завершился ошибкой requested GPU unavailable. На этом хосте проверка оборудования сообщает об отсутствии счётчиков amdgpu. Сценарий 256+64 на целевой дискретной карте остаётся открытым.
+
+## Приёмка C07.7 на Mac
+
+После описанной выше проверки чистой сборки прогон выполняется через Rust CLI с тем же синтетическим Q4_0, CPU backend, размещением cpu и четырьмя потоками GGML. Текст из 255 повторений строки ` a` токенизируется общим C02 в 255 обычных ID. CLI добавляет BOS. Флаг --benchmark-256x64 проверяет длины, отключает досрочную остановку по EOS и проверяет число возвращённых ID перед декодированием.
+
+```sh
+prompt=$(python3 -c 'print(" a" * 255, end="")')
+/usr/bin/time -l "$cli" --gguf "$GGUF" --tokenizer artifacts/c02-v1 \
+  --runner "$work/cpu/bin/burda-ggml" --device cpu --placement cpu \
+  --text "$prompt" --max-new-tokens 64 --benchmark-256x64 \
+  >mac-256x64.txt 2>mac-256x64.log
+grep -E '^prompt=|maximum resident set size' mac-256x64.log
+```
+
+TTFT измеряет backend от своего старта (холодный) и от готовности контекста (тёплый) до первого вычисленного ID. Скорость рассчитана по следующим 63 ID. CLI печатает декодированный текст по завершении генерации.
