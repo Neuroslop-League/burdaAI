@@ -61,3 +61,5 @@ if __name__=="__main__":
     for length,count,threads in [(256,64,4),(32,4,2),(32,4,4),(128,4,2),(128,4,4)]:
         for mode in ("on","off"):
             run(args,length,count,threads,mode)
+
+    assert (args.output/"256-64-t4-on/text").read_bytes() == (args.output/"256-64-t4-off/text").read_bytes()

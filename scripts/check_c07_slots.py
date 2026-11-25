@@ -1,6 +1,8 @@
 """Exercise the persistent GGML scheduler before exposing it through HTTP."""
 import argparse
 import json
+import resource
+import sys
 import subprocess
 import time
 from pathlib import Path
@@ -51,6 +53,8 @@ def check(runner,model):
               sum(map(len,pair.values()))/max(tp.values()),"peak_rss_bytes",peak,flush=True)
         proc.stdin.write("quit\n");proc.stdin.flush()
         assert proc.wait()==0
+        rss=resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
+        print("kernel_peak_rss_bytes",rss if sys.platform=="darwin" else rss*1024)
 
 
 if __name__=="__main__":
