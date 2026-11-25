@@ -8,6 +8,8 @@ use std::{env, fs, path::PathBuf};
 fn main() -> Result<()> {
     let mut args = env::args().skip(1);
     let (mut bundle, mut prompt, mut trace) = (None, None, None);
+    let mut kv = None;
+    let mut threads = 4usize;
     let mut benchmark = false;
     let mut max: usize = 16;
     let mut device = String::from("cpu");
@@ -17,7 +19,7 @@ fn main() -> Result<()> {
     let mut runner = PathBuf::from("burda-ggml");
     while let Some(flag) = args.next() {
         if flag == "--help" {
-            println!("burda-generate (--bundle DIR | --gguf FILE --tokenizer DIR [--runner EXE]) --text TEXT [--device cpu|vulkan] [--placement cpu|last:N] [--max-new-tokens N] [--benchmark-256x64]");
+            println!("burda-generate (--bundle DIR | --gguf FILE --tokenizer DIR [--runner EXE]) --text TEXT [--device cpu|vulkan] [--placement cpu|last:N] [--max-new-tokens N] [--benchmark-256x64] [--kv on|off] [--threads N]");
             return Ok(());
         }
         if flag == "--benchmark-256x64" {
@@ -34,6 +36,14 @@ fn main() -> Result<()> {
             "--max-new-tokens" => max = value.parse().context("invalid max-new-tokens")?,
             "--device" => device = value,
             "--placement" => placement = value,
+            "--kv" => {
+                ensure!(value == "on" || value == "off", "expected on/off");
+                kv = Some(value);
+            }
+            "--threads" => {
+                threads = value.parse()?;
+                ensure!((1..=64).contains(&threads), "invalid thread count");
+            }
             "--gguf" => gguf = Some(PathBuf::from(value)),
             "--tokenizer" => tokenizer_dir = Some(PathBuf::from(value)),
             "--runner" => runner = PathBuf::from(value),
@@ -68,6 +78,12 @@ fn main() -> Result<()> {
         );
         let csv = ids.iter().map(u32::to_string).collect::<Vec<_>>().join(",");
         let output = std::process::Command::new(runner)
+            .env(
+                "BURDA_KV",
+                kv.as_deref()
+                    .unwrap_or(if layers == 0 { "on" } else { "off" }),
+            )
+            .env("BURDA_THREADS", threads.to_string())
             .arg(path)
             .arg(layers.to_string())
             .arg(max.to_string())

@@ -11,6 +11,8 @@
 #include <string>
 #include <vector>
 
+#include "slots.h"
+
 using Clock = std::chrono::steady_clock;
 static double seconds(Clock::time_point a, Clock::time_point b) {
     return std::chrono::duration<double>(b-a).count();
@@ -32,8 +34,9 @@ int main(int argc, char ** argv) try {
     if (argc != 7 && argc != 8) throw std::runtime_error("MODEL LAYERS STEPS TOKENIZER_ID csv-IDs generate|benchmark [last-logits.f32]");
     const auto cold = Clock::now();
     int layers = std::stoi(argv[2]), steps = std::stoi(argv[3]);
+    const bool serving = std::string(argv[6])=="serve";
     bool bench = std::string(argv[6]) == "benchmark";
-    if ((!bench && std::string(argv[6])!="generate") || layers<0 || layers>20 || steps<0)
+    if ((!serving && !bench && std::string(argv[6])!="generate") || layers<0 || layers>20 || steps<0)
         throw std::runtime_error("invalid profile");
     std::vector<llama_token> ids;
     std::stringstream input(argv[5]);
@@ -80,23 +83,44 @@ int main(int argc, char ** argv) try {
     cp.type_k = cp.type_v = GGML_TYPE_F32;
     cp.n_batch = cp.n_ctx;
     cp.n_ubatch = std::min(64u, cp.n_batch);
-    cp.n_threads = cp.n_threads_batch = 4;
+    const bool cache = std::getenv("BURDA_KV") && std::string(std::getenv("BURDA_KV"))=="on";
+    const int threads = std::getenv("BURDA_THREADS") ? std::stoi(std::getenv("BURDA_THREADS")) : 4;
+    if (threads<1 || threads>64) throw std::runtime_error("invalid thread count");
+    cp.n_threads = cp.n_threads_batch = threads;
     cp.offload_kqv = layers>0;
     if (layers) { cp.cb_eval=observe; cp.cb_eval_user_data=&evidence; }
+    if (serving) { cp.n_ctx=4096; cp.n_batch=4096; }
     auto ctx = llama_init_from_model(model,cp);
     if (!ctx) throw std::runtime_error("context allocation failed");
+    if(serving) {
+        auto second=llama_init_from_model(model,cp);
+        if (!second) throw std::runtime_error("second slot allocation failed");
+        serve_slots({ctx,second},size,llama_vocab_eos(vocab));
+        llama_free(second);
+        llama_free(ctx); llama_model_free(model); llama_backend_free();
+        return 0;
+    }
     const auto warm=Clock::now();
     auto first=warm;
     int emitted=0;
     for (int i=0;i<steps;++i) {
-        llama_kv_self_clear(ctx); // Independent full-prefix forward at every step.
-        if (llama_decode(ctx,llama_batch_get_one(ids.data(),ids.size()))) throw std::runtime_error("decode failed");
+        if (!cache || !i) llama_kv_self_clear(ctx);
+        const int offset = cache && i ? int(ids.size())-1 : 0;
+        auto batch = llama_batch_get_one(ids.data()+offset, int(ids.size())-offset);
+        std::vector<llama_pos> positions(batch.n_tokens);
+        for(int j=0;j<batch.n_tokens;++j) positions[j]=offset+j;
+        batch.pos=positions.data();
+        if (llama_decode(ctx,batch)) throw std::runtime_error("decode failed");
         llama_synchronize(ctx);
         auto logits = llama_get_logits_ith(ctx,-1);
         if (!logits || !std::all_of(logits,logits+size,[](float x){return std::isfinite(x);}))
             throw std::runtime_error("invalid logits");
         auto id = static_cast<llama_token>(std::max_element(logits,logits+size)-logits);
         if (!i) first=Clock::now();
+        if (const char * trace = std::getenv("BURDA_TRACE_ALL")) {
+            std::ofstream file(std::string(trace)+"/"+std::to_string(i)+".f32",std::ios::binary);
+            if (!file.write(reinterpret_cast<const char*>(logits),size*sizeof(float))) throw std::runtime_error("trace failed");
+        }
         if (argc==8 && !i) {
             std::ofstream file(argv[7],std::ios::binary);
             if (!file.write(reinterpret_cast<const char*>(logits),size*sizeof(float))) throw std::runtime_error("trace write failed");
