@@ -11,6 +11,8 @@
 #include <string>
 #include <vector>
 
+#include "slots.h"
+
 using Clock = std::chrono::steady_clock;
 static double seconds(Clock::time_point a, Clock::time_point b) {
     return std::chrono::duration<double>(b-a).count();
@@ -32,8 +34,9 @@ int main(int argc, char ** argv) try {
     if (argc != 7 && argc != 8) throw std::runtime_error("MODEL LAYERS STEPS TOKENIZER_ID csv-IDs generate|benchmark [last-logits.f32]");
     const auto cold = Clock::now();
     int layers = std::stoi(argv[2]), steps = std::stoi(argv[3]);
+    const bool serving = std::string(argv[6])=="serve";
     bool bench = std::string(argv[6]) == "benchmark";
-    if ((!bench && std::string(argv[6])!="generate") || layers<0 || layers>20 || steps<0)
+    if ((!serving && !bench && std::string(argv[6])!="generate") || layers<0 || layers>20 || steps<0)
         throw std::runtime_error("invalid profile");
     std::vector<llama_token> ids;
     std::stringstream input(argv[5]);
@@ -86,8 +89,17 @@ int main(int argc, char ** argv) try {
     cp.n_threads = cp.n_threads_batch = threads;
     cp.offload_kqv = layers>0;
     if (layers) { cp.cb_eval=observe; cp.cb_eval_user_data=&evidence; }
+    if (serving) { cp.n_ctx=4096; cp.n_batch=4096; }
     auto ctx = llama_init_from_model(model,cp);
     if (!ctx) throw std::runtime_error("context allocation failed");
+    if(serving) {
+        auto second=llama_init_from_model(model,cp);
+        if (!second) throw std::runtime_error("second slot allocation failed");
+        serve_slots({ctx,second},size,llama_vocab_eos(vocab));
+        llama_free(second);
+        llama_free(ctx); llama_model_free(model); llama_backend_free();
+        return 0;
+    }
     const auto warm=Clock::now();
     auto first=warm;
     int emitted=0;
